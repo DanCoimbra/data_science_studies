@@ -1,7 +1,7 @@
 # Statistics (Python)
 
-* [Visualizing Distributions](Visualizing_Distributions_(Practice).ipynb)
-  * Generates and visualizes binomial and normal distributions.
+* [Visualizing Distributions](Visualizing%20Distributions%20(Practice).ipynb)
+  * Generates binomial and normal distributions, then visualizes the latter in interesting ways.
 
-* [Monthly Brazilian Exports](Monthly_Brazilian_Exports_1997-2020.ipynb)
+* [Monthly Brazilian Exports](Monthly%20Brazilian%20Exports%201997-2020.ipynb)
   * Cleans a public monthly exports dataset and produces a stacked bar graph for each year.
