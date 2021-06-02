@@ -1,4 +1,4 @@
-train.csv
+train*
 Kaggle/Coleridge Initiative (Show US the Data)/test/
 Kaggle/Coleridge Initiative (Show US the Data)/train/
 Kaggle/Coleridge Initiative (Show US the Data)/clean_train
