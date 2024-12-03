@@ -18,7 +18,6 @@ for step in range(n_steps):
     pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
     att_msk = (prompt_enc != tokenizer.pad_token_id).long()
     chat_enc = model.generate(prompt_enc, max_length=1000, pad_token_id=tokenizer.eos_token_id, attention_mask=att_msk)
-
     
     answer_enc = chat_enc[:, prompt_enc.shape[-1]:][0]
     answer = tokenizer.decode(answer_enc, skip_special_tokens=True)
