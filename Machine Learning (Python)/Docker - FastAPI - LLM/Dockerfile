@@ -19,7 +19,7 @@ COPY . .
 
 # Declara a qual porta do contêiner a aplicação escutará
 # (Utilizado por Docker Compose)
-EXPOSE 8000
+EXPOSE 8000 
 
 # Executa servidor
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
