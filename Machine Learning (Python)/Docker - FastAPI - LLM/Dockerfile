@@ -1,5 +1,5 @@
 # Última versão de Python e de Alpine
-FROM python:3.14.0a2-alpine3.20
+FROM python:3.10-slim
 
 # Configura diretório principal
 WORKDIR /app
