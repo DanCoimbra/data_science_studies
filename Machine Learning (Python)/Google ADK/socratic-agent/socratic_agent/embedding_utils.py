@@ -89,49 +89,145 @@ def get_or_create_collection(client: chromadb.Client,
     return collection
 
 
+def clear_collection(client: chromadb.Client, collection_name: str):
+    """
+    Deletes the specified ChromaDB collection if it exists.
+
+    Args:
+        client: The ChromaDB client instance.
+        collection_name: The name of the collection to delete.
+    """
+
+    try:
+        client.get_collection(name=collection_name) # Check existence
+        client.delete_collection(name=collection_name)
+        print(f"Successfully deleted collection: '{collection_name}'.")
+    except ValueError: # Often raised by get_collection if not found
+        print(f"Collection '{collection_name}' not found. No need to delete.")
+    except Exception as e:
+        # Catch other potential errors during get_collection or delete_collection
+        print(f"An error occurred while trying to delete collection '{collection_name}': {e}")
+        print("Please check ChromaDB documentation for specific error details if persistent.")
+
+
 def embed_documents(client: chromadb.Client, collection: chromadb.Collection):
     """
-    Loads documents from the DOCUMENTS_PATH, embeds them using Google GenAI,
-    and stores them in ChromaDB.
+    Loads documents from the DOCUMENTS_PATH, splits them into chunks based on a
+    3-paragraph or 2000-character rule, embeds these chunks, and stores them in ChromaDB.
     """
     if not os.path.exists(DOCUMENTS_PATH):
         print(f"Documents path not found: {DOCUMENTS_PATH}")
         return
 
-    doc_ids = []
-    doc_contents = []
+    chunk_ids = []
+    chunk_contents = []
+    chunk_metadatas = []
+    processed_files_count = 0
+    total_chunks_added_to_db = 0
+    min_chars_per_chunk = 2000
+    paragraphs_per_grouping = 3
+
     for filename in os.listdir(DOCUMENTS_PATH):
         if filename.endswith(".txt"):
             filepath = os.path.join(DOCUMENTS_PATH, filename)
             try:
                 with open(filepath, "r", encoding=ENCODING) as f:
                     content = f.read()
-                    if content.strip():
-                        doc_ids.append(filename)
-                        doc_contents.append(content)
-                    else:
-                        print(f"Skipping empty file: {filename}")
-            except Exception as e:
-                print(f"Error reading file {filename}: {e}")
+                
+                if not content.strip():
+                    print(f"Skipping empty file: {filename}")
+                    continue
 
-    if not doc_contents:
-        print(f"No documents found to embed in {DOCUMENTS_PATH}.")
+                # Split into paragraphs and filter out empty ones
+                all_paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
+                
+                if not all_paragraphs:
+                    print(f"No paragraphs found in file (after stripping): {filename}")
+                    continue
+                
+                current_paragraph_idx = 0
+                chunk_num_in_file = 0
+                file_chunks_count = 0
+
+                while current_paragraph_idx < len(all_paragraphs):
+                    current_chunk_paragraphs_list = []
+                    current_chunk_char_count = 0
+
+                    # 1. Gather initial set of paragraphs (up to paragraphs_per_grouping)
+                    for _ in range(paragraphs_per_grouping):
+                        if current_paragraph_idx < len(all_paragraphs):
+                            paragraph = all_paragraphs[current_paragraph_idx]
+                            current_chunk_paragraphs_list.append(paragraph)
+                            current_chunk_char_count += len(paragraph)
+                            current_paragraph_idx += 1
+                        else:
+                            break # No more paragraphs in the document
+                    
+                    # 2. If the chunk has content and is still under min_chars_per_chunk, add more paragraphs
+                    if current_chunk_paragraphs_list: # Ensure we have at least one paragraph to start
+                        while current_chunk_char_count < min_chars_per_chunk and current_paragraph_idx < len(all_paragraphs):
+                            paragraph = all_paragraphs[current_paragraph_idx]
+                            current_chunk_paragraphs_list.append(paragraph)
+                            current_chunk_char_count += len(paragraph)
+                            current_paragraph_idx += 1
+                        
+                        # Finalize the chunk
+                        final_chunk_text = "\n\n".join(current_chunk_paragraphs_list)
+                        chunk_id = f"{filename}_chunk_{chunk_num_in_file}"
+                        
+                        chunk_ids.append(chunk_id)
+                        chunk_contents.append(final_chunk_text)
+                        chunk_metadatas.append({
+                            "source_file": filename,
+                            "chunk_num_in_file": chunk_num_in_file,
+                            "num_paragraphs_in_chunk": len(current_chunk_paragraphs_list),
+                            "char_count": len(final_chunk_text) 
+                        })
+                        chunk_num_in_file += 1
+                        file_chunks_count += 1
+                    # If current_chunk_paragraphs_list is empty, it means we consumed all paragraphs already.
+                    # The outer while loop condition (current_paragraph_idx < len(all_paragraphs)) will handle termination.
+
+                if file_chunks_count > 0:
+                    print(f"Successfully created {file_chunks_count} chunks from {filename}.")
+                    processed_files_count += 1
+                else:
+                    print(f"No chunks created from {filename} (e.g., all paragraphs were too short and not enough to meet criteria, or file processed fully by previous logic).")
+
+            except Exception as e:
+                print(f"Error processing file {filename}: {e}")
+
+    if not chunk_contents:
+        print(f"No text chunks found to embed in {DOCUMENTS_PATH} after processing all files.")
         return
 
+    total_chunks_added_to_db = len(chunk_ids)
     try:
-        collection.add(ids=doc_ids, documents=doc_contents)
-        print(
-            f"Successfully added/updated {len(doc_ids)} documents in collection '{COLLECTION_NAME}'.")
-        print(f"Current count in collection: {collection.count()}")
+        collection.add(
+            ids=chunk_ids, 
+            documents=chunk_contents, 
+            metadatas=chunk_metadatas
+        )
+        print(f"\nSuccessfully added/updated {total_chunks_added_to_db} text chunks from {processed_files_count} files in collection '{COLLECTION_NAME}'.")
+        print(f"Current count of items (chunks) in collection: {collection.count()}")
     except Exception as e:
-        print(f"Error adding documents to Chroma collection: {e}")
+        print(f"Error adding text chunks to Chroma collection: {e}")
 
 
 if __name__ == '__main__':
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         print("WARNING (main): GOOGLE_API_KEY not found in .env file. ChromaDB will use its default embedding function.")
+    
     chroma_client = get_embedding_client()
+    if not chroma_client:
+        print("Error (main): Failed to get ChromaDB client. Aborting.")
+        exit() # Exit if client can't be initialized
+
+    # Clear the collection at the beginning of the main script execution
+    print(f"Attempting to clear collection '{COLLECTION_NAME}' before embedding...")
+    clear_collection(chroma_client, COLLECTION_NAME)
+
     socratic_collection = get_or_create_collection(
         chroma_client, api_key=api_key)
     print(
