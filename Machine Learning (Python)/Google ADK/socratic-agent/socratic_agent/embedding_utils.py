@@ -99,13 +99,12 @@ def clear_collection(client: chromadb.Client, collection_name: str):
     """
 
     try:
-        client.get_collection(name=collection_name) # Check existence
+        client.get_collection(name=collection_name)
         client.delete_collection(name=collection_name)
         print(f"Successfully deleted collection: '{collection_name}'.")
-    except ValueError: # Often raised by get_collection if not found
+    except ValueError:
         print(f"Collection '{collection_name}' not found. No need to delete.")
     except Exception as e:
-        # Catch other potential errors during get_collection or delete_collection
         print(f"An error occurred while trying to delete collection '{collection_name}': {e}")
         print("Please check ChromaDB documentation for specific error details if persistent.")
 
@@ -138,7 +137,6 @@ def embed_documents(client: chromadb.Client, collection: chromadb.Collection):
                     print(f"Skipping empty file: {filename}")
                     continue
 
-                # Split into paragraphs and filter out empty ones
                 all_paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
                 
                 if not all_paragraphs:

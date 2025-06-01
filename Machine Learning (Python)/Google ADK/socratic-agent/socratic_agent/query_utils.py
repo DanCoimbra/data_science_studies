@@ -44,7 +44,7 @@ def get_top_k(collection: chromadb.Collection, target_text: str, k: int = 5):
 if __name__ == '__main__':
     print(
         f"Executing '{__file__}' directly. This block is for testing or direct execution.")
-    from embedding_utils import get_embedding_client, get_or_create_collection, API_KEY, COLLECTION_NAME
+    from embedding_utils import get_embedding_client, get_or_create_collection, API_KEY
 
     if not API_KEY:
         print("Warning (query_utils_test): GOOGLE_API_KEY not found (either via .env or import)."
@@ -73,7 +73,6 @@ if __name__ == '__main__':
         if retrieved_docs:
             print(f"Retrieved {len(retrieved_docs)} documents:")
             for doc_idx, doc_content in enumerate(retrieved_docs):
-                # Prepare the snippet for display to avoid backslash in f-string expression
                 display_doc_snippet = doc_content[:min(100, len(doc_content))].replace('\n', '')
                 print(
                     f"	Doc {doc_idx+1}: {display_doc_snippet}...")
