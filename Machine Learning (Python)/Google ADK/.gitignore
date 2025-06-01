@@ -15,5 +15,8 @@ __pycache__/
 *.txt
 *.bin
 *.sqlite3
+*.pickle
+*.pkl
+*.db
 
 grok.py
