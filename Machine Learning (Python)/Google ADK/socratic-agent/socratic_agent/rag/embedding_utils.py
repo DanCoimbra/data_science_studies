@@ -1,35 +1,27 @@
 import os
 import chromadb
 from google import genai
-from dotenv import load_dotenv
 
-load_dotenv()
-API_KEY = os.getenv("GOOGLE_API_KEY")
-if not API_KEY:
-    print("Warning: GOOGLE_API_KEY not found. Embedding will fail if a real model is called.")
 
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-CHROMA_DB_PATH = os.path.join(CURRENT_DIR, "..", "chroma_db")
-DOCUMENTS_PATH = os.path.join(CURRENT_DIR, "..", "documents")
-COLLECTION_NAME = "socratic_collection"
-# From google-genai PyPI (client.models.embed_content)
-EMBEDDING_MODEL = "text-embedding-004"
-ENCODING = "latin-1"
-
+# Import configurations from the core.config module
+from ..core.config import (
+    API_KEY, CHROMA_DB_PATH, DOCUMENTS_PATH, 
+    COLLECTION_NAME, EMBEDDING_MODEL, DEFAULT_FILE_ENCODING
+)
 
 class GoogleGenAIEmbeddingFunction(chromadb.EmbeddingFunction):
     """Custom embedding function using the Google GenAI SDK."""
 
     def __init__(self,
                  api_key: str,
-                 embedding_model: str = EMBEDDING_MODEL,
-                 task_type: str = "RETRIEVAL_DOCUMENT"):
+                 embedding_model: str = EMBEDDING_MODEL):
         if not api_key:
+            # This check is somewhat redundant if API_KEY from config is always used,
+            # but good if this class might be instantiated with a direct None key.
             raise ValueError(
                 "Google API Key is required for GoogleGenAIEmbeddingFunction.")
         self._client = genai.Client(api_key=api_key)
         self._embedding_model = embedding_model
-        self._task_type = task_type
 
     def __call__(self,
                  input_texts: chromadb.Documents) -> chromadb.Embeddings:
@@ -57,29 +49,32 @@ class GoogleGenAIEmbeddingFunction(chromadb.EmbeddingFunction):
 
 def get_embedding_client():
     """Initializes and returns a ChromaDB persistent client."""
-    client = chromadb.PersistentClient(
-        path=CHROMA_DB_PATH)  # Saves to disk rather than to memory
+    client = chromadb.PersistentClient(path=CHROMA_DB_PATH)  # Saves to disk rather than to memory
     return client
 
 
 def get_or_create_collection(client: chromadb.Client,
-                             api_key: str | None):
+                             api_key: str | None = API_KEY): # Default to API_KEY from config
     """
-    Gets or creates a Chroma collection.
-    Uses GoogleGenAIEmbeddingFunction if api_key is provided, otherwise Chroma's default.
+    Gets or creates a Chroma collection using COLLECTION_NAME from config.
+    Uses GoogleGenAIEmbeddingFunction if api_key is provided (defaults to config.API_KEY),
+    otherwise Chroma's default.
     """
     embedding_fn = None
     if api_key:
         try:
-            embedding_fn = GoogleGenAIEmbeddingFunction(api_key=api_key)
+            embedding_fn = GoogleGenAIEmbeddingFunction(api_key=api_key, embedding_model=EMBEDDING_MODEL)
             print(
                 f"Using GoogleGenAIEmbeddingFunction with model: {EMBEDDING_MODEL}")
+        except ValueError as ve:
+            print(f"ValueError initializing embedding function: {ve}. Falling back to default.")
+            embedding_fn = None # Fallback on error
         except Exception as e:
             print(
                 f"Failed to initialize GoogleGenAIEmbeddingFunction: {e}. Falling back to default.")
             embedding_fn = None
     else:
-        print("No API key provided. Using ChromaDB's default embedding function.")
+        print("No API key available (checked config and argument). Using ChromaDB's default embedding function.")
 
     collection = client.get_or_create_collection(
         name=COLLECTION_NAME,
@@ -89,7 +84,7 @@ def get_or_create_collection(client: chromadb.Client,
     return collection
 
 
-def clear_collection(client: chromadb.Client, collection_name: str):
+def clear_collection(client: chromadb.Client, collection_name: str = COLLECTION_NAME): # Default to config
     """
     Deletes the specified ChromaDB collection if it exists.
 
@@ -106,7 +101,6 @@ def clear_collection(client: chromadb.Client, collection_name: str):
         print(f"Collection '{collection_name}' not found. No need to delete.")
     except Exception as e:
         print(f"An error occurred while trying to delete collection '{collection_name}': {e}")
-        print("Please check ChromaDB documentation for specific error details if persistent.")
 
 
 def embed_documents(client: chromadb.Client, collection: chromadb.Collection):
@@ -122,7 +116,6 @@ def embed_documents(client: chromadb.Client, collection: chromadb.Collection):
     chunk_contents = []
     chunk_metadatas = []
     processed_files_count = 0
-    total_chunks_added_to_db = 0
     min_chars_per_chunk = 2000
     paragraphs_per_grouping = 3
 
@@ -130,7 +123,8 @@ def embed_documents(client: chromadb.Client, collection: chromadb.Collection):
         if filename.endswith(".txt"):
             filepath = os.path.join(DOCUMENTS_PATH, filename)
             try:
-                with open(filepath, "r", encoding=ENCODING) as f:
+                # Using DEFAULT_FILE_ENCODING from config
+                with open(filepath, "r", encoding=DEFAULT_FILE_ENCODING) as f:
                     content = f.read()
                 
                 if not content.strip():
@@ -199,44 +193,57 @@ def embed_documents(client: chromadb.Client, collection: chromadb.Collection):
         print(f"No text chunks found to embed in {DOCUMENTS_PATH} after processing all files.")
         return
 
-    total_chunks_added_to_db = len(chunk_ids)
     try:
         collection.add(
             ids=chunk_ids, 
             documents=chunk_contents, 
             metadatas=chunk_metadatas
         )
-        print(f"\nSuccessfully added/updated {total_chunks_added_to_db} text chunks from {processed_files_count} files in collection '{COLLECTION_NAME}'.")
+        print(f"\nSuccessfully added/updated {len(chunk_ids)} text chunks from {processed_files_count} files in collection '{collection.name}'.")
         print(f"Current count of items (chunks) in collection: {collection.count()}")
     except Exception as e:
         print(f"Error adding text chunks to Chroma collection: {e}")
 
 
 if __name__ == '__main__':
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        print("WARNING (main): GOOGLE_API_KEY not found in .env file. ChromaDB will use its default embedding function.")
-    
+    # API_KEY is now imported from config and its existence is checked there.
+    # If API_KEY is None, a warning is printed by config.py and get_or_create_collection will use default.
+    print(f"Testing embedding_utils.py... API_KEY is set: {bool(API_KEY)}")
+
     chroma_client = get_embedding_client()
-    if not chroma_client:
-        print("Error (main): Failed to get ChromaDB client. Aborting.")
-        exit() # Exit if client can't be initialized
+    assert chroma_client is not None, "Failed to get ChromaDB client."
+    print("Successfully got ChromaDB client.")
 
-    # Clear the collection at the beginning of the main script execution
-    print(f"Attempting to clear collection '{COLLECTION_NAME}' before embedding...")
-    clear_collection(chroma_client, COLLECTION_NAME)
+    print(f"Clearing collection '{COLLECTION_NAME}' before test embedding...")
+    clear_collection(chroma_client)
+    print(f"Collection '{COLLECTION_NAME}' cleared or did not exist.")
 
-    socratic_collection = get_or_create_collection(
-        chroma_client, api_key=api_key)
-    print(
-        f"Successfully connected to ChromaDB and got/created collection '{COLLECTION_NAME}'.")
+    socratic_collection = get_or_create_collection(chroma_client)
+    assert socratic_collection is not None, "Failed to get or create collection."
+    assert socratic_collection.name == COLLECTION_NAME, f"Collection name mismatch: {socratic_collection.name}"
+    print(f"Successfully got/created collection '{socratic_collection.name}'.")
+    
     initial_count = socratic_collection.count()
     embed_documents(chroma_client, socratic_collection)
+    print(f"embed_documents function executed.")
+    
     final_count = socratic_collection.count()
-    if final_count > initial_count:
-        print("\nAttempting a test query...")
-        results = socratic_collection.query(
-            query_texts=["What is machine learning?"], n_results=1)
-        print("Query results:", results['documents'])
-    else:
-        print("No documents were added to the collection.")
+    print(f"Final item count in collection: {final_count}")
+    
+    assert final_count > initial_count, "No documents were added by embed_documents."
+    print(f"{final_count - initial_count} chunk(s) added.")
+
+    print("Attempting a test query on the embedded document...")
+    query_text = "artificial intelligence"
+    results = socratic_collection.query(
+        query_texts=[query_text], 
+        n_results=1,
+        include=['documents']
+    )
+    assert results is not None, "Query returned None results."
+    retrieved_docs = results.get('documents')
+    assert retrieved_docs is not None, "'documents' key missing."
+    assert len(retrieved_docs) == 1, f"Expected 1 list of results, got {len(retrieved_docs)}."
+    assert len(retrieved_docs[0]) > 0, f"Query for '{query_text}' returned no documents."
+    print(f"Query for '{query_text}' retrieved: {retrieved_docs[0][0][:50]}...")
+    print("embedding_utils.py tests passed.") 

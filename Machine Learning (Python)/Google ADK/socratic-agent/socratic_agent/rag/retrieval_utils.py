@@ -1,5 +1,12 @@
 import chromadb
 
+# Import configurations from the core.config module
+from ..core.config import API_KEY # Only API_KEY is directly needed here for now
+# Other configs like COLLECTION_NAME are used by functions imported from embedding_utils
+
+# Import necessary functions from embedding_utils
+# These will now use the config values internally after being updated
+from .embedding_utils import get_embedding_client, get_or_create_collection
 
 def get_top_k(collection: chromadb.Collection, target_text: str, k: int = 5):
     """
@@ -29,55 +36,59 @@ def get_top_k(collection: chromadb.Collection, target_text: str, k: int = 5):
         results = collection.query(query_texts=[target_text], n_results=k)
         documents = results.get('documents')
     except Exception as e:
-        print(f"Error (get_top_k): {e}")
+        print(f"Error querying collection in get_top_k: {e}")
         return []
 
     display_text_snippet = target_text[:30].replace('\n', '')
     if documents and documents[0] is not None:
-        print(f"Retrieved {len(documents)} documents for target text: '{display_text_snippet}...'")
+        # query_texts was a list of one item, so documents will be a list containing one list of results
+        print(f"Retrieved {len(documents[0])} documents for target text: '{display_text_snippet}...'")
         return documents[0]
     else:
-        print("Warning (get_top_k): No documents found for target text: '{display_text_snippet}...'")
+        print(f"Warning (get_top_k): No documents found for target text: '{display_text_snippet}...'")
         return []
 
 
 if __name__ == '__main__':
     print(
         f"Executing '{__file__}' directly. This block is for testing or direct execution.")
-    from embedding_utils import get_embedding_client, get_or_create_collection, API_KEY
-
-    if not API_KEY:
-        print("Warning (query_utils_test): GOOGLE_API_KEY not found (either via .env or import)."
-              "Embedding function for collection might default, affecting query relevance.")
+    # API_KEY is imported from config and used by get_or_create_collection by default
+    print(f"API_KEY is set in config: {bool(API_KEY)}")
 
     test_client = get_embedding_client()
     test_collection = get_or_create_collection(test_client, api_key=API_KEY)
     collection_count = test_collection.count()
     print(
         f"Test collection '{test_collection.name}' found with {collection_count} items.")
+    if collection_count == 0:
+        print("Warning (retrieval_utils_test): Collection is empty. Retrieval will likely find no documents.")
 
     queries_to_test = [
         "What is the nature of subjective experience?",
         "Explain the concept of machine learning.",
         "How can computational complexity be used to understand the limits of human reasoning?",
-        "Can creativity be mechanized?"
-        ""
+        "Can creativity be mechanized?",
+        "" # Test empty query
     ]
-    ks_to_test = [5, 3, 101, 0, 1]
+    ks_to_test = [5, 3, 101, 0, 1] # k=101 and k=0 will be corrected by get_top_k
 
     for i, query in enumerate(queries_to_test):
         k_val = ks_to_test[i]
         print(f"\n--- Test Case {i+1} ---")
-        print(f"Querying for: '{query}' with k={k_val}")
-        retrieved_docs = get_top_k(test_collection, query, k=k_val)
-        if retrieved_docs:
-            print(f"Retrieved {len(retrieved_docs)} documents:")
-            for doc_idx, doc_content in enumerate(retrieved_docs):
-                display_doc_snippet = doc_content[:min(100, len(doc_content))].replace('\n', '')
-                print(
-                    f"	Doc {doc_idx+1}: {display_doc_snippet}...")
+        print(f"Querying for: '{query[:50]}...' with k={k_val}")
+        
+        # Ensure collection is not None before passing to get_top_k
+        if test_collection:
+            retrieved_docs = get_top_k(test_collection, query, k=k_val)
+            if retrieved_docs:
+                print(f"Retrieved {len(retrieved_docs)} documents:")
+                for doc_idx, doc_content in enumerate(retrieved_docs):
+                    display_doc_snippet = doc_content[:min(100, len(doc_content))].replace('\n', '')
+                    print(
+                        f"\tDoc {doc_idx+1}: {display_doc_snippet}...")
+            else:
+                print("No documents retrieved for this query (or get_top_k returned empty).")
         else:
-            print(
-                "No documents retrieved for this query, or an error occurred within get_top_k.")
+            print("Skipping query as test_collection is None.")
 
-    print("\nFinished testing query_utils.py.")
+    print("\nFinished testing retrieval_utils.py.")
