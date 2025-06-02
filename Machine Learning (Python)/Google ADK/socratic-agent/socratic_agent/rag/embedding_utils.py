@@ -4,7 +4,7 @@ from google import genai
 
 
 # Import configurations from the core.config module
-from ..core.config import (
+from socratic_agent.core.config import (
     API_KEY, CHROMA_DB_PATH, DOCUMENTS_PATH, 
     COLLECTION_NAME, EMBEDDING_MODEL, DEFAULT_FILE_ENCODING
 )

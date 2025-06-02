@@ -26,6 +26,9 @@ COLLECTION_NAME = "socratic_collection"
 # Embedding Configuration
 EMBEDDING_MODEL = "text-embedding-004" # Google's text-embedding-004 model
 
+# MCP Server Configuration
+MCP_SERVER_URL = "http://127.0.0.1:8001"
+
 # File Handling
 DEFAULT_FILE_ENCODING = "latin-1" # Default encoding for reading documents
 
@@ -37,4 +40,5 @@ if __name__ == '__main__':
     print(f"COLLECTION_NAME: {COLLECTION_NAME}")
     print(f"EMBEDDING_MODEL: {EMBEDDING_MODEL}")
     print(f"DEFAULT_FILE_ENCODING: {DEFAULT_FILE_ENCODING}")
-    print(f"API_KEY is set: {bool(API_KEY)}") 
+    print(f"API_KEY is set: {bool(API_KEY)}")
+    print(f"MCP_SERVER_URL: {MCP_SERVER_URL}") 

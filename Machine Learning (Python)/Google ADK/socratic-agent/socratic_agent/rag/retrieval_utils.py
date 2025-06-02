@@ -1,7 +1,7 @@
 import chromadb
 
 # Import configurations from the core.config module
-from ..core.config import API_KEY # Only API_KEY is directly needed here for now
+from socratic_agent.core.config import API_KEY # Only API_KEY is directly needed here for now
 # Other configs like COLLECTION_NAME are used by functions imported from embedding_utils
 
 # Import necessary functions from embedding_utils

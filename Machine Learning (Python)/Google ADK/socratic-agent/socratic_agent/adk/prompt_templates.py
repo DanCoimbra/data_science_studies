@@ -75,10 +75,10 @@ if __name__ == '__main__':
     print(f"Testing prompt_templates.py...")
 
     # Imports for ChromaDB and querying - these will use config internally
-    from ..rag.embedding_utils import get_embedding_client, get_or_create_collection
-    from ..rag.retrieval_utils import get_top_k
+    from socratic_agent.rag.embedding_utils import get_embedding_client, get_or_create_collection
+    from socratic_agent.rag.retrieval_utils import get_top_k
     # Import API_KEY from config to check its status for the test, though rag utils handle it for ops
-    from ..core.config import API_KEY 
+    from socratic_agent.core.config import API_KEY 
 
     if not API_KEY:
         # This warning is now mainly for the test script's awareness.
