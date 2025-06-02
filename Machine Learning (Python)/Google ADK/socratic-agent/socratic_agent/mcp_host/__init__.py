@@ -1,0 +1,1 @@
+# This file makes the 'mcp_host' directory a Python package.
