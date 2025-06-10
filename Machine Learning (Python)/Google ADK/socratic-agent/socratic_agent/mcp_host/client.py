@@ -1,40 +1,48 @@
 import httpx
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from socratic_agent.core.config import MCP_SERVER_URL
-# Using models defined in the host's own model file
-from .models import MCPToolRegistryInfo, MCPToolInfo
+from .models import MCPToolRegistryInfo
 
-class SimpleMCPClient:
-    """A simple client to interact with the MCP Server without managed lifespan."""
+
+class MCPClientError(Exception):
+    """Custom exception for all MCP client-related errors."""
+    pass
+
+
+class MCPClient:
+    """A simple, non-managed client to interact with the MCP Server."""
     def __init__(self, server_url: str = MCP_SERVER_URL):
+        if not server_url:
+            raise ValueError("MCP_SERVER_URL cannot be empty.")
         self._server_url = server_url
-        # Initialize httpx.AsyncClient here; it will be closed manually after use
         self._client = httpx.AsyncClient(base_url=self._server_url)
 
-    async def get_available_tools(self) -> Optional[MCPToolRegistryInfo]:
-        """Polls the MCP server for its tool registry."""
+    async def get_available_tools(self) -> MCPToolRegistryInfo:
+        """
+        Polls the MCP server for its tool registry.
+        Raises MCPClientError on any failure.
+        """
         try:
             response = await self._client.get("/tools")
             response.raise_for_status()
-            tool_data = response.json()
-            return MCPToolRegistryInfo(**tool_data)
+            return MCPToolRegistryInfo(**response.json())
         except httpx.RequestError as e:
-            print(f"MCPClient: Error connecting to MCP server at {self._server_url}/tools: {e}")
-            return None
+            raise MCPClientError(f"Network error getting tools: {e}") from e
         except httpx.HTTPStatusError as e:
-            print(f"MCPClient: Server returned error for /tools: {e.response.status_code} - {e.response.text}")
-            return None
+            raise MCPClientError(f"Server error getting tools: {e.response.status_code} - {e.response.text}") from e
         except Exception as e:
-            print(f"MCPClient: Unexpected error when fetching tools: {e}")
-            return None
+            raise MCPClientError(f"Unexpected error getting tools: {e}") from e
 
     async def invoke_tool(
         self, 
         tool_name: str, 
         parameters: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """Invokes a tool on the MCP server."""
+    ) -> Dict[str, Any]:
+        """
+        Invokes a tool on the MCP server.
+        Raises MCPClientError on any failure.
+        """
         request_payload = {"parameters": parameters}
         try:
             response = await self._client.post(
@@ -42,19 +50,27 @@ class SimpleMCPClient:
                 json=request_payload
             )
             response.raise_for_status()
-            return response.json() # Expected: {"results": ..., "error": ...}
+            return response.json()
         except httpx.RequestError as e:
-            print(f"MCPClient: Error connecting to MCP server at /tools/{tool_name}/invoke: {e}")
-            return {"results": {}, "error": str(e)}
+            raise MCPClientError(f"Network error invoking tool '{tool_name}': {e}") from e
         except httpx.HTTPStatusError as e:
-            print(f"MCPClient: Server returned error for /tools/{tool_name}/invoke: {e.response.status_code} - {e.response.text}")
-            return {"results": {}, "error": f"{e.response.status_code} - {e.response.text}"}
+            raise MCPClientError(f"Server error invoking tool '{tool_name}': {e.response.status_code} - {e.response.text}") from e
         except Exception as e:
-            print(f"MCPClient: Unexpected error when invoking tool {tool_name}: {e}")
-            return {"results": {}, "error": str(e)}
+            raise MCPClientError(f"Unexpected error invoking tool '{tool_name}': {e}") from e
 
-    async def retrieve_documents(self, tool_name: str, query_text: str, k: int = 5) -> Optional[Dict[str, Any]]:
-        """Specific method to invoke a document retriever tool by its identified name."""
+    async def retrieve_documents(
+        self, 
+        tool_name: str, 
+        query_text: str, 
+        k: int = 5
+    ) -> Dict[str, Any]:
+        """Invokes a document retriever tool"""
+        if not tool_name:
+            raise ValueError("tool_name cannot be empty.")
+        if not query_text:
+            raise ValueError("query_text cannot be empty.")
+        if not 0 < k <= 100:
+            raise ValueError("k must be a positive integer between 1 and 100.")
         params = {"query_text": query_text, "k": k}
         return await self.invoke_tool(tool_name, params)
 
