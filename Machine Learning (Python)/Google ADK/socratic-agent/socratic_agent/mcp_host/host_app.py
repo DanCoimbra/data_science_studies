@@ -25,6 +25,8 @@ async def process_text_endpoint(host_input: HostInput):
     Receives target text, retrieves relevant documents via MCP Server, 
     constructs a prompt, calls an LLM, and returns the response.
     """
+    print(f"MCP Host: Processing text: {host_input.target_text[:min(len(host_input.target_text), 50)]}...")
+    
     mcp_client = MCPClient()
     if host_input is None or not host_input.hasattr("target_text") or not host_input.hasattr("prompt_style"):
         raise ValueError("MCP Host: HostInput is None or missing target_text attribute.")
@@ -34,19 +36,11 @@ async def process_text_endpoint(host_input: HostInput):
     try:
         # Get tool registry from MCP Server
         tools_info = await mcp_client.get_available_tools()
+        if not any(tool.tool_name == EXPECTED_RETRIEVER_TOOL_NAME for tool in tools_info.tools):
+            llm_error = f"MCP Host: Document retriever tool '{EXPECTED_RETRIEVER_TOOL_NAME}' not found."
+            return HostOutput(processed_text="", error_message=llm_error)
 
-        if not tools_info or not tools_info.tools:
-            llm_error = "MCP Host: No tools reported by MCP Server."
-            return HostOutput(processed_text="", error_message=llm_error, retrieved_documents=[])
-        
-        for tool in tools_info.tools:
-            if tool.tool_name == EXPECTED_RETRIEVER_TOOL_NAME:
-                break
-        else:
-            llm_error = f"MCP Host: Document retriever tool '{EXPECTED_RETRIEVER_TOOL_NAME}' not found on MCP Server."
-            return HostOutput(processed_text="", error_message=llm_error, retrieved_documents=[])
-        
-        # Get documents from MCP Server
+        # Step 2: Retrieve documents using the tool
         tool_invocation_response = await mcp_client.retrieve_documents(
             tool_name=EXPECTED_RETRIEVER_TOOL_NAME, 
             query_text=host_input.target_text, 

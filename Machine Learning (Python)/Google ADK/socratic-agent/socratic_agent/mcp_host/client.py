@@ -23,6 +23,7 @@ class MCPClient:
         Polls the MCP server for its tool registry.
         Raises MCPClientError on any failure.
         """
+        print(f"MCP Client: Polling MCP Server for available tools...")
         try:
             response = await self._client.get("/tools")
             response.raise_for_status()
@@ -43,6 +44,7 @@ class MCPClient:
         Invokes a tool on the MCP server.
         Raises MCPClientError on any failure.
         """
+        print(f"MCP Client: Invoking tool '{tool_name}' with parameters: {parameters}")
         request_payload = {"parameters": parameters}
         try:
             response = await self._client.post(
@@ -65,6 +67,7 @@ class MCPClient:
         k: int = 5
     ) -> Dict[str, Any]:
         """Invokes a document retriever tool"""
+        print(f"MCP Client: Invoking document retriever tool '{tool_name}' with query text: {query_text[:min(len(query_text), 50)]}...")
         if not tool_name:
             raise ValueError("tool_name cannot be empty.")
         if not query_text:

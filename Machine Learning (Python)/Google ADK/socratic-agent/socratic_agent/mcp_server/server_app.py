@@ -22,6 +22,7 @@ app = FastAPI(
 
 def initialize_chroma():
     """Initializes ChromaDB client and collection if not already done."""
+
     global chroma_client, document_collection
     
     if chroma_client is None:
@@ -32,13 +33,14 @@ def initialize_chroma():
 
     if document_collection is None:
         try:
-            document_collection = get_or_create_collection(chroma_client, api_key=API_KEY)
+            document_collection = get_or_create_collection(chroma_client)
         except Exception as e:
             raise RuntimeError(f"Document collection initialization failed: {e}")
 
 chroma_client = None
 document_collection = None
 initialize_chroma()
+print(f"MCP Server: ChromaDB client and collection initialized.")
 
 # Defines tool registry
 DOCUMENT_RETRIEVER_TOOL_NAME = "document_retriever"
