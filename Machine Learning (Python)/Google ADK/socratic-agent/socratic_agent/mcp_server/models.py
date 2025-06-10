@@ -9,7 +9,7 @@ class RetrieverToolInputSchema(BaseModel):
 
 class RetrieverToolOutputSchema(BaseModel):
     """Output schema specifically for the document retriever tool."""
-    retrieved_documents: List[str] = Field(..., description="List of retrieved document contents."))
+    retrieved_documents: List[Dict[str, Any]] = Field(..., description="List of retrieved document objects, including text and metadata.")
     error: Optional[str] = None
 
 
