@@ -23,7 +23,7 @@ def _get_llm_client():
     return _client
 
 
-def get_llm_response(prompt: str) -> str:
+async def get_llm_response(prompt: str) -> str:
     """
     Generates a response from the Google GenAI model (synchronous).
 
@@ -33,12 +33,13 @@ def get_llm_response(prompt: str) -> str:
     Returns:
         The generated text response, or an error message if something goes wrong.
     """
-    llm_client = _get_llm_client()
-    if not llm_client:
-        return "LLM client not configured or failed to initialize."
+    try:
+        llm_client = _get_llm_client()
+    except Exception as e:
+        raise RuntimeError(f"Error initializing LLM client: {e}")
 
     try:
-        response = llm_client.models.generate_content(
+        response = await llm_client.aio.models.generate_content(
             model='gemini-1.5-flash',
             contents=prompt
         )
@@ -46,7 +47,7 @@ def get_llm_response(prompt: str) -> str:
         if hasattr(response, 'text'):
             return response.text
         else:
-            return "LLM response had no .text attribute"
+            raise ValueError("LLM response had no .text attribute")
 
     except Exception as e:
-        return f"Error generating LLM response: {e}" 
+        raise RuntimeError(f"Error generating LLM response: {e}")
