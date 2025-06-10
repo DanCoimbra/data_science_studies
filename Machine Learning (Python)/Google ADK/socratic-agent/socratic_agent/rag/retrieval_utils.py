@@ -7,8 +7,9 @@ from socratic_agent.core.config import API_KEY # Only API_KEY is directly needed
 # Import necessary functions from embedding_utils
 # These will now use the config values internally after being updated
 from .embedding_utils import get_embedding_client, get_or_create_collection
+from typing import List, Dict, Any
 
-def get_top_k(collection: chromadb.Collection, target_text: str, k: int = 5):
+def get_top_k(collection: chromadb.Collection, target_text: str, k: int = 5) -> List[Dict[str, Any]]:
     """
     Retrieves the top-k most relevant documents from the ChromaDB collection
     based on cosine similarity to the target text.
@@ -19,34 +20,29 @@ def get_top_k(collection: chromadb.Collection, target_text: str, k: int = 5):
         k: The number of top documents to retrieve (0 < k ≤ 100)
 
     Returns:
-        A list of document contents (strings), or an empty list if an error occurs
-        or no documents are found.
+        A list of document objects (dictionaries with 'text' and 'metadata'), 
+        or an empty list if an error occurs or no documents are found.
     """
     if not target_text:
-        print("Warning (get_top_k): Target text for retrieval is empty.")
-        return []
+        raise ValueError("Target text cannot be empty.")
     if not isinstance(k, int) or not (0 < k <= 100):
-        print(
-            f"Warning (get_top_k): k must be a positive integer and ≤ 100, got {k}. Defaulting to 5.")
-        k = 5
+        raise ValueError("k must be a positive integer and ≤ 100.")
 
-    print(
-        f"Attempting to query collection '{collection.name}' for target text '{target_text[:30]}...' with k={k}")
     try:
-        results = collection.query(query_texts=[target_text], n_results=k)
-        documents = results.get('documents')
-    except Exception as e:
-        print(f"Error querying collection in get_top_k: {e}")
-        return []
+        results = collection.query(
+            query_texts=[target_text], 
+            n_results=k,
+            include=['documents', 'metadatas']
+        )
+        documents = results.get('documents', None)[0]
+        metadatas = results.get('metadatas', None)[0]
+        if not documents:
+            raise ValueError("No documents found for target text.")
+        documents = [{"text": documents[i], "metadata": metadatas[i]} for i in range(len(documents))]
+        return documents
 
-    display_text_snippet = target_text[:30].replace('\n', '')
-    if documents and documents[0] is not None:
-        # query_texts was a list of one item, so documents will be a list containing one list of results
-        print(f"Retrieved {len(documents[0])} documents for target text: '{display_text_snippet}...'")
-        return documents[0]
-    else:
-        print(f"Warning (get_top_k): No documents found for target text: '{display_text_snippet}...'")
-        return []
+    except Exception as e:
+        raise ValueError(f"Error querying collection in get_top_k: {e}")
 
 
 if __name__ == '__main__':
@@ -82,8 +78,8 @@ if __name__ == '__main__':
             retrieved_docs = get_top_k(test_collection, query, k=k_val)
             if retrieved_docs:
                 print(f"Retrieved {len(retrieved_docs)} documents:")
-                for doc_idx, doc_content in enumerate(retrieved_docs):
-                    display_doc_snippet = doc_content[:min(100, len(doc_content))].replace('\n', '')
+                for doc_idx, doc_obj in enumerate(retrieved_docs):
+                    display_doc_snippet = doc_obj.get('text', '')[:min(100, len(doc_obj.get('text', '')))].replace('\n', '')
                     print(
                         f"\tDoc {doc_idx+1}: {display_doc_snippet}...")
             else:
