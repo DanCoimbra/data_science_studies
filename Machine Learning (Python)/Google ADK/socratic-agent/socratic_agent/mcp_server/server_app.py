@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import ValidationError
@@ -13,34 +14,42 @@ from socratic_agent.core.config import API_KEY
 HOST_URL = "http://127.0.0.1"
 PORT = 8001
 
+# Globals to be populated by the lifespan manager
+CHROMA_CLIENT = None
+CHROMA_COLLECTION = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Handles startup and shutdown events for the FastAPI app.
+    Initializes ChromaDB on startup.
+    """
+    global CHROMA_CLIENT, CHROMA_COLLECTION
+    print("MCP Server: Lifespan startup...")
+    
+    # Fail fast if critical services cannot be initialized.
+    CHROMA_CLIENT = get_embedding_client()
+    if CHROMA_CLIENT is None:
+        raise RuntimeError("ChromaDB client initialization failed.")
+    
+    CHROMA_COLLECTION = get_or_create_collection(CHROMA_CLIENT)
+    if CHROMA_COLLECTION is None:
+        raise RuntimeError("Document collection initialization failed.")
+    
+    print(f"MCP Server: ChromaDB client and collection '{CHROMA_COLLECTION.name}' initialized successfully.")
+    
+    yield
+    
+    print("MCP Server: Lifespan shutdown.")
+    CHROMA_CLIENT, CHROMA_COLLECTION = None, None
+
+
 app = FastAPI(
     title="Socratic Agent - MCP Server",
     description="Exposes tools like document retrieval to an MCP Host.",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
-
-
-def initialize_chroma():
-    """Initializes ChromaDB client and collection if not already done."""
-
-    global chroma_client, document_collection
-    
-    if chroma_client is None:
-        try:
-            chroma_client = get_embedding_client()
-        except Exception as e:
-            raise RuntimeError(f"ChromaDB client initialization failed: {e}")
-
-    if document_collection is None:
-        try:
-            document_collection = get_or_create_collection(chroma_client)
-        except Exception as e:
-            raise RuntimeError(f"Document collection initialization failed: {e}")
-
-chroma_client = None
-document_collection = None
-initialize_chroma()
-print(f"MCP Server: ChromaDB client and collection initialized.")
 
 # Defines tool registry
 DOCUMENT_RETRIEVER_TOOL_NAME = "document_retriever"
@@ -69,9 +78,13 @@ async def invoke_tool(tool_name: str, invocation_input: ToolInvocationInput):
 
     if tool_name == DOCUMENT_RETRIEVER_TOOL_NAME:
         try:
+            # Add a check to ensure the collection was initialized successfully
+            if CHROMA_COLLECTION is None:
+                raise HTTPException(status_code=503, detail="ChromaDB service is unavailable due to a startup error.")
+
             retriever_params = RetrieverToolInputSchema(**invocation_input.parameters)
             retrieved_documents = get_top_k(
-                collection=document_collection,
+                collection=CHROMA_COLLECTION,
                 target_text=retriever_params.query_text,
                 k=retriever_params.k
             )
