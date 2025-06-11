@@ -7,7 +7,7 @@ class HostInput(BaseModel):
 
 class HostOutput(BaseModel):
     processed_text: str = Field(..., description="The final processed text or response from the LLM.")
-    retrieved_documents: Optional[List[Dict[str, Any]]] = Field(None, description="Documents retrieved by the MCP server, if any.")
+    retrieved_documents: Optional[List[str]] = Field(None, description="Text contents of documents retrieved by the MCP server, if any.")
     prompt_used: Optional[str] = Field(None, description="The actual prompt sent to the LLM.")
     error_message: Optional[str] = Field(None, description="Any error message if processing failed.")
 
