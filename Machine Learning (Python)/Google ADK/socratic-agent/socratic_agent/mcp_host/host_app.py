@@ -25,22 +25,24 @@ async def process_text_endpoint(host_input: HostInput):
     Receives target text, retrieves relevant documents via MCP Server, 
     constructs a prompt, calls an LLM, and returns the response.
     """
-    print(f"MCP Host: Processing text: {host_input.target_text[:min(len(host_input.target_text), 50)]}...")
+    print(f"MCP Host: Processing text: {host_input.target_text[:min(len(host_input.target_text), 100)]}...")
     
-    mcp_client = MCPClient()
-    if host_input is None or not host_input.hasattr("target_text") or not host_input.hasattr("prompt_style"):
+    mcp_client = MCPClient() 
+    if host_input is None or not hasattr(host_input, "target_text") or not hasattr(host_input, "prompt_style"):
         raise ValueError("MCP Host: HostInput is None or missing target_text attribute.")
     if host_input.prompt_style not in ["evaluation", "summarization"]:
         raise ValueError("MCP Host: Unsupported prompt style.")
 
     try:
         # Get tool registry from MCP Server
+        print("MCP Host: Getting tool registry from MCP Server...")
         tools_info = await mcp_client.get_available_tools()
         if not any(tool.tool_name == EXPECTED_RETRIEVER_TOOL_NAME for tool in tools_info.tools):
             llm_error = f"MCP Host: Document retriever tool '{EXPECTED_RETRIEVER_TOOL_NAME}' not found."
             return HostOutput(processed_text="", error_message=llm_error)
 
         # Step 2: Retrieve documents using the tool
+        print("MCP Host: Retrieving documents using the tool...")
         tool_invocation_response = await mcp_client.retrieve_documents(
             tool_name=EXPECTED_RETRIEVER_TOOL_NAME, 
             query_text=host_input.target_text, 
@@ -66,6 +68,7 @@ async def process_text_endpoint(host_input: HostInput):
         await mcp_client.close()
 
     # Generate prompt
+    print("MCP Host: Generating prompt...")
     prompt_text = None
     if host_input.prompt_style == "evaluation":
         prompt_text = create_evaluation_prompt(user_prompt=host_input.target_text, retrieved_docs=retrieved_documents)
@@ -73,6 +76,7 @@ async def process_text_endpoint(host_input: HostInput):
         prompt_text = create_summarization_prompt(user_prompt=host_input.target_text, retrieved_docs=retrieved_documents)
     
     # LLM call
+    print("MCP Host: Calling LLM...")
     llm_response_text = await get_llm_response(prompt_text)
     return HostOutput(
         processed_text=llm_response_text,
