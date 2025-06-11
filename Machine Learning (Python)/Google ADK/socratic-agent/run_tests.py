@@ -4,8 +4,7 @@ import time
 import httpx
 import subprocess
 
-PACKAGE_DIR = os.path.abspath(os.path.dirname(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(PACKAGE_DIR, os.pardir))
+PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
