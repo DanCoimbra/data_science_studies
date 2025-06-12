@@ -10,6 +10,7 @@ class HostOutput(BaseModel):
     retrieved_documents: Optional[List[str]] = Field(None, description="Text contents of documents retrieved by the MCP server, if any.")
     prompt_used: Optional[str] = Field(None, description="The actual prompt sent to the LLM.")
     error_message: Optional[str] = Field(None, description="Any error message if processing failed.")
+    model_name: Optional[str] = Field(None, description="The name of the LLM model that generated the response.")
 
 class MCPToolInfo(BaseModel):
     tool_name: str
