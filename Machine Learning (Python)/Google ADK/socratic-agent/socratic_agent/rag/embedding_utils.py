@@ -1,4 +1,5 @@
 import os
+import time
 import chromadb
 from google import genai
 
@@ -23,19 +24,36 @@ class GoogleGenAIEmbeddingFunction(chromadb.EmbeddingFunction):
         embeddings = []
         for i in range(0, len(input_texts), batch_size):
             text_batch = input_texts[i:i + batch_size]
-            try:
-                response = self._client.models.embed_content(
-                    model=self._embedding_model,
-                    contents=text_batch
-                )
-                if not hasattr(response, 'embeddings'):
-                    raise ValueError("Response must have an 'embeddings' attribute.")
-                if not isinstance(response.embeddings, list):
-                    raise ValueError("Response.embeddings must be a list.")
-                embeddings.extend([embedding.values for embedding in response.embeddings])
-            except Exception as e:
-                print(f"Error during embedding batch with Google GenAI: {e}")
-                embeddings = None
+            max_retries = 3
+            backoff_factor = 2
+            for attempt in range(max_retries):
+                try:
+                    response = self._client.models.embed_content(
+                        model=self._embedding_model,
+                        contents=text_batch
+                    )
+                    if not hasattr(response, 'embeddings'):
+                        raise ValueError("Response must have an 'embeddings' attribute.")
+                    if not isinstance(response.embeddings, list):
+                        raise ValueError("Response.embeddings must be a list.")
+                    
+                    embeddings.extend([embedding.values for embedding in response.embeddings])
+                    # Success, break the retry loop
+                    break
+                except Exception as e:
+                    error_str = str(e)
+                    if "503" in error_str and "UNAVAILABLE" in error_str:
+                        if attempt < max_retries - 1:
+                            sleep_time = backoff_factor ** attempt
+                            print(f"Google GenAI API unavailable. Retrying in {sleep_time} seconds...")
+                            time.sleep(sleep_time)
+                        else:
+                            print(f"Google GenAI API unavailable after {max_retries} attempts. Giving up on this batch.")
+                            raise e # Propagate the error to halt the process
+                    else:
+                        # It's a different, non-retryable error
+                        print(f"A non-retryable error occurred during embedding: {e}")
+                        raise e
         return embeddings
 
 
@@ -108,34 +126,60 @@ def embed_documents(client: chromadb.Client, collection: chromadb.Collection):
     chunk_metadatas = []
     chunk_size = 2000 # Fixed chunk size
 
+    # List of encodings to try, in order of preference
+    encodings_to_try = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+
     for filename in os.listdir(DOCUMENTS_PATH):
         if filename.endswith(".txt") or filename.endswith(".md"):
             filepath = os.path.join(DOCUMENTS_PATH, filename)
-            try:
-                with open(filepath, "r", encoding=DEFAULT_FILE_ENCODING) as f:
-                    content = f.read()
-                if not content.strip():
-                    print(f"Skipping empty file: {filename}")
+            content = None
+            
+            # Try different encodings
+            for encoding in encodings_to_try:
+                try:
+                    with open(filepath, "r", encoding=encoding) as f:
+                        content = f.read()
+                    # If we get here, the encoding worked
+                    break
+                except UnicodeDecodeError:
+                    continue
+                except Exception as e:
+                    print(f"Error reading file {filename} with {encoding}: {e}")
                     continue
 
-                # Simple, non-overlapping character-based chunking
-                chunk_num_in_file = 0
-                for i in range(0, len(content), chunk_size):
-                    chunk_text = content[i:i + chunk_size]
-                    if not chunk_text.strip():
-                        continue
-                    chunk_id = f"{'_'.join(filename.split('.')[0].split(' '))}_chunk_{chunk_num_in_file}"
-                    chunk_ids.append(chunk_id)
-                    chunk_contents.append(chunk_text)
-                    chunk_metadatas.append({
-                        "source_file": filename,
-                        "chunk_num_in_file": chunk_num_in_file,
-                        "char_count": len(chunk_text) 
-                    })
-                    chunk_num_in_file += 1
+            if content is None:
+                print(f"Failed to read file {filename} with any of the attempted encodings")
+                continue
 
-            except Exception as e:
-                print(f"Error processing file {filename}: {e}")
+            if not content.strip():
+                print(f"Skipping empty file: {filename}")
+                continue
+
+            # Simple, non-overlapping character-based chunking
+            chunk_num_in_file = 0
+            for i in range(0, len(content), chunk_size):
+                chunk_text = content[i:i + chunk_size]
+                if not chunk_text.strip():
+                    continue
+                    
+                # Ensure the chunk text is properly encoded
+                try:
+                    # First decode with the successful encoding
+                    decoded_text = chunk_text.encode(encoding).decode('utf-8')
+                except UnicodeError:
+                    # If that fails, try a more permissive approach
+                    decoded_text = chunk_text.encode('latin-1', errors='replace').decode('utf-8', errors='replace')
+                
+                chunk_id = f"{'_'.join(filename.split('.')[0].split(' '))}_chunk_{chunk_num_in_file}"
+                chunk_ids.append(chunk_id)
+                chunk_contents.append(decoded_text)
+                chunk_metadatas.append({
+                    "source_file": filename,
+                    "chunk_num_in_file": chunk_num_in_file,
+                    "char_count": len(decoded_text),
+                    "encoding_used": encoding
+                })
+                chunk_num_in_file += 1
 
     if not chunk_contents:
         print(f"No text chunks found to embed in {DOCUMENTS_PATH} after processing all files.")
