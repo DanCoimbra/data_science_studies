@@ -3,6 +3,7 @@ import sys
 import time
 import httpx
 import subprocess
+import argparse
 
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 if PROJECT_ROOT not in sys.path:
@@ -13,6 +14,8 @@ from socratic_agent.mcp_host.models import HostOutput
 BASE_URL = "http://127.0.0.1"
 SERVER_PORT = "8001"
 HOST_PORT = "8002"
+STREAMLIT_PORT = "8003"
+
 EVALUATION_PROMPT = "Evaluate the claim that emergent properties are a mere illusion."
 SUMMARIZATION_PROMPT = "Summarize the philosophical arguments related to physicalism and qualia."
 
@@ -72,67 +75,112 @@ def run_test(prompt_text: str, style: str):
         return False
 
 
-def main():
-    """Starts servers, runs tests, and cleans up."""
+def main(auto: bool = False):
+    """Starts servers and, depending on the mode, either launches the Streamlit UI
+    for manual interaction or runs the predefined automatic tests.
+
+    Args:
+        auto (bool): When ``True`` run the automatic tests without starting the
+            Streamlit UI. When ``False`` start the Streamlit UI and wait for the
+            user to interact with it.
+    """
+
     python_executable = sys.executable
-    
-    server_command = [
-        python_executable, "-m", "uvicorn", 
-        "socratic_agent.mcp_server.server_app:app", "--port", SERVER_PORT, "--log-level", "debug"
-    ]
-    host_command = [
-        python_executable, "-m", "uvicorn", 
-        "socratic_agent.mcp_host.host_app:app", "--port", HOST_PORT, "--log-level", "debug"
-    ]
-    
-    server_proc = None
-    host_proc = None
-    
-    creationflags = 0
-    # On Windows we *do not* hide the subprocess console window so that
-    # stdout/stderr from the MCP Server and Host remain visible. This allows
-    # exceptions (e.g., ValueError from MCPClient construction) to propagate
-    # to the main terminal where the tests are executed.
-    # if platform.system() == "Windows":
-    #     creationflags = subprocess.CREATE_NO_WINDOW
+
+    # Ensure we can reference the process handles in ``finally`` even if an
+    # exception occurs before they are assigned.
+    server_proc: subprocess.Popen | None = None
+    host_proc: subprocess.Popen | None = None
+    streamlit_proc: subprocess.Popen | None = None
 
     try:
         print("Starting MCP Server...")
+        server_command = [
+            python_executable, "-m", "uvicorn", 
+            "socratic_agent.mcp_server.server_app:app", "--port", SERVER_PORT,
+            "--log-level", "debug",
+        ]
         server_proc = subprocess.Popen(
-            server_command, cwd=PROJECT_ROOT,
-            creationflags=creationflags
+            server_command, cwd=PROJECT_ROOT
         )
+        server_ready = wait_for_server(f"{BASE_URL}:{SERVER_PORT}", "MCP Server")
         
         print("Starting MCP Host...")
+        host_command = [
+            python_executable, "-m", "uvicorn", 
+            "socratic_agent.mcp_host.host_app:app", "--port", HOST_PORT,
+            "--log-level", "debug",
+        ]
         host_proc = subprocess.Popen(
-            host_command, cwd=PROJECT_ROOT,
-            creationflags=creationflags
+            host_command, cwd=PROJECT_ROOT
         )
-        
-        server_ready = wait_for_server(f"{BASE_URL}:{SERVER_PORT}", "MCP Server")
         host_ready = wait_for_server(f"{BASE_URL}:{HOST_PORT}", "MCP Host")
 
         if not server_ready or not host_ready:
             print("One or more servers failed to start. Aborting tests.")
             return
 
-        success = run_test(EVALUATION_PROMPT, "evaluation")
-        if success:
-            run_test(SUMMARIZATION_PROMPT, "summarization")
-    
+        # ------------------------------------------------------------------
+        # Depending on --auto, either run tests or launch the UI
+        # ------------------------------------------------------------------
+        if auto:
+            # Automatic mode – run predefined prompts without Streamlit UI.
+            success = run_test(EVALUATION_PROMPT, "evaluation")
+            if success:
+                run_test(SUMMARIZATION_PROMPT, "summarization")
+        else:
+            # Interactive mode – launch Streamlit UI for the user.
+            print("Starting Streamlit app…")
+            streamlit_command = [
+                python_executable, "-m", "streamlit", "run",
+                os.path.join(PROJECT_ROOT, "streamlit_app.py"),
+                "--server.port", STREAMLIT_PORT,
+                "--server.headless", "true",
+            ]
+            streamlit_proc = subprocess.Popen(streamlit_command, cwd=PROJECT_ROOT)
+
+            print(
+                f"Streamlit UI available at {BASE_URL}:{STREAMLIT_PORT}. "
+                "Interact with the UI and press CTRL+C here to stop."
+            )
+
+            # Wait until the user terminates the script (e.g., via CTRL+C) or
+            # the Streamlit process exits on its own.
+            streamlit_proc.wait()
+
+    except KeyboardInterrupt:
+        print("\nInterrupted by user.")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         
     finally:
-        print("--- Tests Complete. Shutting down servers. ---")
-        if host_proc:
+        print("--- Shutting down processes ---")
+
+        if streamlit_proc and streamlit_proc.poll() is None:
+            streamlit_proc.terminate()
+            streamlit_proc.wait()
+            print("Streamlit app shut down.")
+
+        if host_proc and host_proc.poll() is None:
             host_proc.terminate()
             host_proc.wait()
             print("MCP Host shut down.")
-        if server_proc:
+
+        if server_proc and server_proc.poll() is None:
             server_proc.terminate()
             server_proc.wait()
             print("MCP Server shut down.")
 
+        print("All processes terminated. Bye!")
+
+
 if __name__ == "__main__":
-    main() 
+    parser = argparse.ArgumentParser(description="Run Socratic Agent tests and/or UI.")
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run predefined automatic tests without launching the Streamlit UI.",
+    )
+
+    args = parser.parse_args()
+    main(auto=args.auto) 
