@@ -11,8 +11,9 @@ st.set_page_config(page_title="Socratic Agent UI", page_icon="🧠", layout="cen
 st.title("🧠 Socratic Agent Interface")
 st.markdown(
     """
-    Enter or upload text, select an operation, and let the Socratic Agent
-    retrieve context and query the LLM for you.
+    Enter or upload text, select an operation, and let the Socratic Agent retrieve context and query the LLM for you.
+    'Evaluation' elicits a critique based on the retrieved context. 'Summarization' prompts a survey of context
+    information relevant to the text.
     """
 )
 
