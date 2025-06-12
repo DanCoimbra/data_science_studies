@@ -28,7 +28,7 @@ def create_summarization_prompt(user_prompt: str, retrieved_docs: list[str]) -> 
         Do not attempt to answer any questions that might be implied in the prompt; focus solely on summarizing the relevant information found in the documents.
         If the documents do not contain information relevant to the topics in the User Prompt, please state that.
         Do not include information not present in the provided documents.
-        However, do mention interesting research leads one could pursue based on the documents.
+        CRUCIAL: At the end, mention interesting advanced research leads one could pursue based on the documents.
         """
     return prompt
 
@@ -55,17 +55,20 @@ def create_evaluation_prompt(user_prompt: str, retrieved_docs: list[str]) -> str
         {formatted_documents}
         ---
 
-        Based on the Original User Prompt and the Retrieved Documents, please evaluate the ideas or statements presented in the user's prompt. Consider the following aspects:
+        Based on the Original User Prompt, please evaluate the ideas or statements presented in the user's prompt.
+        You are to consider a list of aspects that is provided below.
+        You are to evaluate the Original User Prompt based on two criteria: (i) your background knowledge, and (ii) the information in the Retrieved Documents.
 
-        1.  Plausibility/Support: Are the ideas in the user's prompt supported or contradicted by the information in the retrieved documents?
-        2.  Nuance/Complexity: Do the retrieved documents add any nuance, complexity, or alternative perspectives to the user's prompt?
-        3.  Correctness/Accuracy: Are factual statements in the user's prompt accurate in light of the retrieved documents?
-        4.  Background knowledge: Irrespective of the documents' contents, is the user's prompt lacking in plausibility, correctness,or nuance?
 
-        Please provide a concise analysis based on these points, drawing only from the provided documents.
-        Mention the documents that were used for each point.
-        If the documents are not sufficient to help evaluate the prompt, please state that.
-        However, carry out the 'Background knowledge' check even if the documents are lacking in information.
+        1.  Plausibility/Support: Are the ideas in the user's prompt supported or contradicted by the information in 'i' and 'ii'?
+        2.  Nuance/Complexity: Does the information in 'i' and 'ii' add any nuance, complexity, or alternative perspectives to the user's prompt?
+        3.  Correctness/Accuracy: Are factual statements in the user's prompt accurate in light of the information in 'i' and 'ii'?
+        4.  Background knowledge: Based on 'i' and 'ii', is the user's prompt lacking in plausibility, correctness,or nuance?
+
+        Please provide a concise analysis based on these points, drawing from both your background knowledge and the Retrieved Documents.
+        Mention the Retrieved Documents that were used for each point, if they were relevant at all.
+        If the Retrieved Documents are not sufficient to help evaluate the prompt, please state that.
+        However, carry out the 'Background knowledge' (type i) check even if the Retrieved Documents are lacking in information.
         """
     return prompt_text
 
