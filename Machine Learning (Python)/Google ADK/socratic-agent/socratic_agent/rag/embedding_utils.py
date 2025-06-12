@@ -109,7 +109,7 @@ def embed_documents(client: chromadb.Client, collection: chromadb.Collection):
     chunk_size = 2000 # Fixed chunk size
 
     for filename in os.listdir(DOCUMENTS_PATH):
-        if filename.endswith(".txt"):
+        if filename.endswith(".txt") or filename.endswith(".md"):
             filepath = os.path.join(DOCUMENTS_PATH, filename)
             try:
                 with open(filepath, "r", encoding=DEFAULT_FILE_ENCODING) as f:
