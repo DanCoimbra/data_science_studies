@@ -1,0 +1,5 @@
+[server]
+runOnSave = true
+fileWatcherType = "watchdog"
+headless = true
+port = 8003 
