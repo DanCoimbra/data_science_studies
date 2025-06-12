@@ -9,8 +9,8 @@ API_KEY = os.getenv("GOOGLE_API_KEY")
 if not API_KEY:
     print("Warning (config.py): GOOGLE_API_KEY not found in .env file. Dependent functionalities might fail.")
 
-GENAI_MODEL = os.getenv("GENAI_MODEL")
-FALLBACK_GENAI_MODEL = os.getenv("FALLBACK_GENAI_MODEL")
+GENAI_MODEL="gemini-2.0-flash"
+FALLBACK_GENAI_MODEL="gemini-1.5-flash-8b"
 
 # Project Paths
 # __file__ is socratic-agent/socratic_agent/core/config.py
