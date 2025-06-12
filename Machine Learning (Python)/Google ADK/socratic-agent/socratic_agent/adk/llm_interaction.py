@@ -1,6 +1,6 @@
 import threading
 from google import genai
-from socratic_agent.core.config import API_KEY
+from socratic_agent.core.config import API_KEY, GENAI_MODEL
 
 _client = None
 _client_lock = threading.Lock()
@@ -39,8 +39,10 @@ async def get_llm_response(prompt: str) -> str:
         raise RuntimeError(f"Error initializing LLM client: {e}")
 
     try:
+        model_name = GENAI_MODEL
+
         response = await llm_client.aio.models.generate_content(
-            model='gemini-1.5-flash',
+            model=model_name,
             contents=prompt
         )
         
