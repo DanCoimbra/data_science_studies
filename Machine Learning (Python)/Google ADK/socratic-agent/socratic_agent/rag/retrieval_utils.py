@@ -23,6 +23,8 @@ def get_top_k(collection: chromadb.Collection, target_text: str, k: int = 5) -> 
         A list of document objects (dictionaries with 'text' and 'metadata'), 
         or an empty list if an error occurs or no documents are found.
     """
+    print(f"ChromaDB: Retrieving top {k} documents for target text: {target_text[:min(50, len(target_text))]}...")
+
     if not target_text:
         raise ValueError("Target text cannot be empty.")
     if not isinstance(k, int) or not (0 < k <= 100):
